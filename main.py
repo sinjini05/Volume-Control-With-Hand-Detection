@@ -1,50 +1,18 @@
-import cv2 
-import mediapipe as mp
-from math import hypot
-from ctypes import cast, POINTER
-from comtypes import CLSCTX_ALL
-from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
-import numpy as np 
-
-# Function to initialize camera
-def initialize_camera():
+# Function to initialize camera with frame width and height
+def initialize_camera(frame_width=640, frame_height=480):
     cap = cv2.VideoCapture(0)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, frame_width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, frame_height)
     if not cap.isOpened():
         raise Exception("Could not open video device.")
     return cap
 
-# Function to set volume with validation
-def set_volume(length, volMin, volMax):
-    if 15 < length < 220:
-        vol = np.interp(length, [15, 220], [volMin, volMax])
-        volume.SetMasterVolumeLevel(vol, None)
-        print(f"Volume set to: {vol}, Length: {length}")
-    else:
-        print(f"Length out of range: {length}")
-
-# Function to handle errors and log them
-def handle_error(e):
-    print(f"An error occurred: {e}")
-
-# Initialize video capture
+# Initialize video capture with a smaller frame size
 try:
-    cap = initialize_camera()
+    cap = initialize_camera(frame_width=320, frame_height=240)  # Resize to 320x240
 except Exception as e:
     handle_error(e)
     exit(1)
-
-# Initialize MediaPipe hands
-mpHands = mp.solutions.hands 
-hands = mpHands.Hands()
-mpDraw = mp.solutions.drawing_utils
-
-# Initialize audio volume control
-devices = AudioUtilities.GetSpeakers()
-interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-volume = cast(interface, POINTER(IAudioEndpointVolume))
-
-# Get volume range
-volMin, volMax = volume.GetVolumeRange()[:2]
 
 while True:
     try:
@@ -52,6 +20,9 @@ while True:
         if not success:
             print("Ignoring empty camera frame.")
             continue
+
+        # Resize the image (if needed) - optional since we set it earlier
+        img = cv2.resize(img, (320, 240))  # Resize if necessary
 
         imgRGB = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         results = hands.process(imgRGB)
@@ -76,8 +47,12 @@ while True:
             length = hypot(x2 - x1, y2 - y1)
             set_volume(length, volMin, volMax)
 
+        cv2.putText(img, f'Volume: {int(volume.GetMasterVolumeLevel())}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+
         cv2.imshow('Image', img)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        
+        # Add delay for lower frame rate (e.g., 30 FPS)
+        if cv2.waitKey(33) & 0xFF == ord('q'):  # 1000 ms / 30 FPS ≈ 33 ms
             break
 
     except cv2.error as e:
